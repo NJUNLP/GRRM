@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "GRRM"
+dynamic = ["version"]
+
+dependencies = [
+    "torch>=2.6.0",
+    "torchvision",
+    "transformers>=4.56.2",
+    "datasets",
+    "pandas",
+    "pyarrow",
+    "fire",
+]
+
+requires-python = ">=3.10"
+
+authors = [
+    {name = "Sen Yang", email = "yangsen@smail.nju.edu.cn"},
+]
+maintainers = [
+    {name = "Sen Yang", email = "yangsen@smail.nju.edu.cn"},
+]
+
+description = "GRRM: Group Relative Reward Modeling for Machine Translation"
+
+readme = "README.md"
+
+license = {file = "LICENSE"}
+
+keywords = ["deep-learning", "pytorch", "large language model", "LLM", "machine translation", "reward modeling"]
+
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+[project.urls]
+Homepage = "https://github.com/NJUNLP/GRRM"
+Repository = "https://github.com/NJUNLP/GRRM"
+Issues = "https://github.com/NJUNLP/GRRM/issues"
+
+[tool.setuptools]
+packages = []
+py-modules = []
+
+[tool.setuptools.dynamic]
+version = {file = ["VERSION"]}
+
+[tool.setuptools.package-data]
+"*" = ["*.md"]
+
+[project.optional-dependencies]
+infer = [
+    "vllm>=0.10.2",
+    "accelerate>=1.10.0",
+    "flash-attn>=2.8.0",
+]
+eval = [
+    "sacrebleu[ja,ko]",
+    "bleurt @ git+https://github.com/google-research/bleurt.git@master",
+    "tensorflow==2.19.0",
+]
+dev = [
+    "pytest",
+    "black",
+    "ruff",
+]
