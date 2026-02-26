@@ -6,7 +6,7 @@ from collections import defaultdict
 from utils.helpers import _score_to_rank
 import wandb
 
-from utils.config import TEST_DATA_META_INFO
+from utils.config import RANKING_TEST_DATA_META_INFO
 import utils.reward_utils as reward_utils
 from utils.config import candidate_identifiers
 import json
@@ -282,11 +282,11 @@ def main(
     seen_metrics = set()
 
     for did in data_id_list:
-        if did not in TEST_DATA_META_INFO:
+        if did not in RANKING_TEST_DATA_META_INFO:
             raise ValueError(
-                f"data_id {did} not in TEST_DATA_META_INFO: {TEST_DATA_META_INFO.keys()}"
+                f"data_id {did} not in RANKING_TEST_DATA_META_INFO: {RANKING_TEST_DATA_META_INFO.keys()}"
             )
-        data_meta_info = TEST_DATA_META_INFO[did]
+        data_meta_info = RANKING_TEST_DATA_META_INFO[did]
         data_path = Path(data_meta_info["path"])
         lang_pair = f"{data_meta_info['src_lang']}2{data_meta_info['trg_lang']}"
 

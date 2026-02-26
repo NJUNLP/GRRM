@@ -73,76 +73,41 @@ LANGUAGE_BY_CODE = {
 
 
 
-TEST_DATA_META_INFO = {
-    "tower_zhen_testset_gemini_ref": {
+RANKING_TEST_DATA_META_INFO = {
+    "tower_zhen_ranking_testset": {
         "src_lang": "zh/en",
         "trg_lang": "en/zh",
-        "path": "parquet_data/test_data_ranking/tower_zhen_testset_gemini_ref.parquet",
-    },
-    "tower_zhen_testset_dsr1_ref": {
-        "src_lang": "zh/en",
-        "trg_lang": "en/zh",
-        "path": "parquet_data/test_data_ranking/tower_zhen_testset_dsr1_ref.parquet",
-    },
-    "tower_zhen_testset_robust_gemini_ref": {
-        "src_lang": "zh/en",
-        "trg_lang": "en/zh",
-        "path": "parquet_data/test_data_ranking/tower_zhen_testset_robust_gemini_ref.parquet",
-    },
-    "tower_zhen_testset_robust_dsr1_ref": {
-        "src_lang": "zh/en",
-        "trg_lang": "en/zh",
-        "path": "parquet_data/test_data_ranking/tower_zhen_testset_robust_dsr1_ref.parquet",
+        "path": "parquet_data/TowerBlocks-MT-Ranking/test.parquet",
     },
     "wmt_newstest2020_psqm": {
         "src_lang": "zh",
         "trg_lang": "en",
-        "path": "parquet_data/test_data_ranking/wmt_newstest2020_zhen_psqm_group_test.parquet",
-    },
-    "wmt_generalMT2022_zhen_mqm": {
-        "src_lang": "zh",
-        "trg_lang": "en",
-        "path": "parquet_data/test_data_ranking/wmt_generalMT2022_zhen_mqm_group_test.parquet",
-    },
-    "wmt_generalMT2022_zhen_mqm.norm": {
-        "src_lang": "zh",
-        "trg_lang": "en",
-        "path": "parquet_data/test_data_ranking/wmt_generalMT2022_zhen_mqm_group_test.norm.parquet",
+        "path": "parquet_data/MT_Ranking_Metric_Test/data/wmt_newstest2020_zhen_psqm_group_test.parquet",
     },
     "wmt_generalMT2022_enzh_mqm": {
         "src_lang": "en",
         "trg_lang": "zh",
-        "path": "parquet_data/test_data_ranking/wmt_generalMT2022_enzh_mqm_group_test.parquet",
+        "path": "parquet_data/MT_Ranking_Metric_Test/data/wmt_generalMT2022_enzh_mqm_group_test.parquet",
+    },
+    "wmt_generalMT2022_zhen_mqm": {
+        "src_lang": "zh",
+        "trg_lang": "en",
+        "path": "parquet_data/MT_Ranking_Metric_Test/data/wmt_generalMT2022_zhen_avgmqm_group_test.parquet",
     },
     "wmt_generalMT2022_ende_mqm": {
         "src_lang": "en",
         "trg_lang": "de",
-        "path": "parquet_data/test_data_ranking/wmt_generalMT2022_ende_mqm_group_test.parquet",
+        "path": "parquet_data/MT_Ranking_Metric_Test/data/wmt_generalMT2022_ende_avgmqm_group_test.parquet",
     },
-    "wmt_generalMT2022_zhen_avgmqm": {
-        "src_lang": "zh",
-        "trg_lang": "en",
-        "path": "parquet_data/test_data_ranking/wmt_generalMT2022_zhen_avgmqm_group_test.parquet",
-    },
-    "wmt_generalMT2022_ende_avgmqm": {
-        "src_lang": "en",
-        "trg_lang": "de",
-        "path": "parquet_data/test_data_ranking/wmt_generalMT2022_ende_avgmqm_group_test.parquet",
-    },
-    "wmt_generalMT2022_enru_avgmqm": {
+    "wmt_generalMT2022_enru_mqm": {
         "src_lang": "en",
         "trg_lang": "ru",
-        "path": "parquet_data/test_data_ranking/wmt_generalMT2022_enru_avgmqm_group_test.parquet",
+        "path": "parquet_data/MT_Ranking_Metric_Test/data/wmt_generalMT2022_enru_avgmqm_group_test.parquet",
     },
     "seedx_challenge_ranking": {
         "src_lang": "en/zh",
         "trg_lang": "zh/en",
-        "path": "parquet_data/test_data_ranking/seedx_challenge.ranking.parquet",
-    },
-    "seedx_challenge_ranking_max_bleurt": {
-        "src_lang": "en/zh",
-        "trg_lang": "zh/en",
-        "path": "parquet_data/test_data_ranking/seedx_challenge.ranking.max_bleurt.parquet",
+        "path": "parquet_data/MT_Ranking_Metric_Test/data/seedx_challenge.ranking.max_bleurt.parquet",
     },
 }
 
