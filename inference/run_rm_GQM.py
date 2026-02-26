@@ -126,7 +126,7 @@ def func_call(
     top_p: float = 1.0,
     max_new_tokens: int = 4096,
     max_retries: int = 6,
-    prompt_type: str = "score",
+    prompt_type: str = "ranking_score",
     add_example: bool = False,
     model = None,
     tokenizer = None,
