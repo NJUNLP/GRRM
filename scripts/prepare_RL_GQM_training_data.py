@@ -38,7 +38,7 @@ def construct_data_item(
     else:
         raise ValueError(f"Invalid prompt_type {prompt_type}")
     base_item = {
-        "data_source": f"qwen_tower_sampling_zhen.group_ranking.{prompt_type}",
+        "data_source": f"TowerBlocks-MT-Ranking.{prompt_type}",
         "prompt": [{"role": "user", "content": prompt}],
         "ability": "ranking",
         "reward_model": {"ground_truth": ground_truth},
@@ -80,7 +80,7 @@ def construct_data_item(
                 raise ValueError(f"Invalid prompt_type {prompt_type}")
 
             data_items.append({
-                "data_source": f"qwen_tower_sampling_zhen.group_ranking.{prompt_type}",
+                "data_source": f"TowerBlocks-MT-Ranking.{prompt_type}",
                 "prompt": [{"role": "user", "content": shuffled_prompt}],
                 "ability": "ranking",
                 "reward_model": {"ground_truth": shuffled_ground_truth},
@@ -106,7 +106,7 @@ def main(
     score_key: str,
     analysis_key: str,
     prompt_type: str = "ranking_score",
-    combination_augment: int = 0,
+    subgroup_augment: int = 0,
     shuffle_augment: int = 0,
 ):
     assert prompt_type in ["ranking", "ranking_score"] # TODO: support score
@@ -144,15 +144,15 @@ def main(
 
         # --- Generate subset-based data if applicable ---
         n = len(mt_texts)
-        if combination_augment > 0 and n > 2:
+        if subgroup_augment > 0 and n > 2:
             # Generate all possible subsets of indices with size >=2 and <n
             all_subsets = []
             for r in range(2, n):
                 all_subsets.extend(itertools.combinations(range(n), r))
 
-            # Randomly sample up to combination_augment subsets
+            # Randomly sample up to subgroup_augment subsets
             random.shuffle(all_subsets)
-            selected_subsets = all_subsets[:combination_augment]
+            selected_subsets = all_subsets[:subgroup_augment]
 
             for subset in selected_subsets:
                 subset = list(subset)
