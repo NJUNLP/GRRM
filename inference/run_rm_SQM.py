@@ -42,7 +42,7 @@ def func_call(
     temperature: float = 1.0,
     top_p: float = 1.0,
     max_new_tokens: int = 4096,
-    max_retries: int = 6,
+    retry: int = 6,
     model = None,
     tokenizer = None,
 ):
@@ -88,7 +88,7 @@ def func_call(
     retry_count = 0
     failed_indices = [i for i, s in enumerate(score_list) if s is None]
 
-    while failed_indices and retry_count < max_retries:
+    while failed_indices and retry_count < retry:
         retry_count += 1
         print(f"Retry attempt {retry_count}: {len(failed_indices)} failed items remaining...")
 
@@ -107,6 +107,6 @@ def func_call(
         failed_indices = [i for i, s in enumerate(score_list) if s is None]
 
     if failed_indices:
-        print(f"Warning: {len(failed_indices)} items still failed after {max_retries} retries.")
+        print(f"Warning: {len(failed_indices)} items still failed after {retry} retries.")
 
     return {"scores": score_list, "responses": output_text_list}
