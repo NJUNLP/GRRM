@@ -8,14 +8,14 @@ import wandb
 from utils.config import MT_TEST_DATA_META_INFO
 import numpy as np
 from inference.run_mt import load_model_tokenizer
-import inference.run_oss_eval as run_oss_eval
+import inference.run_oss_SQM as run_oss_eval
 
 def log_results_to_wandb(
     datasets_metric_results: Dict[str, Dict[str, float]],
     config: Dict[str, Any],
     datasets_metric_none_counts: Optional[Dict[str, Dict[str, int]]] = None,
 ):
-    """将多个数据集的结果以表格形式记录到 wandb。
+    """Log results from multiple datasets to wandb as a table.
 
     Args:
         datasets_metric_results: {dataset_name: {metric: value}}
@@ -30,7 +30,7 @@ def log_results_to_wandb(
         config=config,
     )
 
-    # 所有出现过的指标集合
+    # All metrics that have appeared
     all_metrics: List[str] = []
     seen = set()
     for _ds, mr in datasets_metric_results.items():
@@ -39,14 +39,14 @@ def log_results_to_wandb(
                 seen.add(m)
                 all_metrics.append(m)
 
-    # 以 config["metrics"] 为主，若为空则使用所有指标
+    # Use config["metrics"] as primary, fallback to all metrics if empty
     cfg_metrics = config.get("metrics") or []
     if cfg_metrics:
         metrics = [m for m in cfg_metrics if m in seen] or all_metrics
     else:
         metrics = all_metrics
 
-    # 构建按数据集聚合后的表格，首列为 data_id（即 dataset_name）
+    # Build table aggregated by dataset, first column is data_id (i.e., dataset_name)
     columns = ["data_id"] + metrics
     rows: List[List[Any]] = []
     for dataset_name, metric_results in datasets_metric_results.items():
@@ -57,15 +57,15 @@ def log_results_to_wandb(
 
     table = wandb.Table(columns=columns, data=rows)
 
-    # 记录到 wandb
+    # Log to wandb
     wandb.log({"metrics_by_dataset": table})
 
-    # 同步到 summary 方便快速查看（data_id/metric）
+    # Sync to summary for quick access (data_id/metric)
     for dataset_name, metric_results in datasets_metric_results.items():
         for m, v in metric_results.items():
             wandb.run.summary[f"{dataset_name}/{m}"] = v
 
-    # 记录 None 计数到 summary
+    # Log None counts to summary
     if datasets_metric_none_counts:
         for dataset_name, metric_none_counts in datasets_metric_none_counts.items():
             for m, cnt in metric_none_counts.items():
@@ -193,15 +193,17 @@ def run_eval(
     runs: int,
     metrics: list[str],
     oss_models: Optional[Dict[str, Any]] = None,
+    bleurt_model_path: Optional[str] = None,
+    oss_model_path: Optional[str] = None,
 ) -> tuple[Dict[str, float], list[str], Dict[str, int], Dict[str, list[Optional[float]]]]:
-    # 展平 mt 的输出（runs x N -> N*runs）
+    # Flatten mt outputs (runs x N -> N*runs)
     mt_list_for_runs = [item for sublist in mt_list_for_runs for item in sublist]
 
     n = len(df)
     if n == 0:
-        raise ValueError("输入数据为空：df 行数为 0")
+        raise ValueError("Input data is empty: df has 0 rows")
 
-    # 构造参考译文与语言对的扁平列表，与 mt_list_for_runs 对齐
+    # Build flat lists for references and language pairs, aligned with mt_list_for_runs
     ref_mt_list = df["trg_text"].tolist()
     refs_flat = ref_mt_list * runs
 
@@ -216,20 +218,21 @@ def run_eval(
     # add evaluation hint to ref
     if "comment" in df.columns:
         comment_list = df["comment"].tolist()
+        # concatenate reference and evaluation hint. The evaluation hint of Seed-X-Challenge set is in Chinese, so we use Chinese prompt.
         ref_hint_list = [f"{ref}\n评估重点：\n{comment}" for ref, comment in zip(refs_flat, comment_list)]
         ref_hint_flat = ref_hint_list * runs
     else:
         ref_hint_flat = None
 
-    # 聚合结果：{ metric: dataset-level avg }
+    # Aggregate results: { metric: dataset-level avg }
     metric_results: Dict[str, float] = {}
     valid_metrics: list[str] = []
     metric_none_counts: Dict[str, int] = {}
-    # 每条样本的指标平均分（跨 runs 平均）
+    # Per-item metric averages (averaged across runs)
     per_item_metric_avgs: Dict[str, list[Optional[float]]] = {}
 
     def _normalize_metric_output(output: Any, n_items: int, n_runs: int) -> list[float]:
-        # 支持多种返回形态：list、list[list]、dict 包含 scores、numpy 数组等
+        # Support multiple return formats: list, list[list], dict with scores, numpy array, etc.
         try:
             import numpy as _np
         except Exception:
@@ -246,9 +249,9 @@ def run_eval(
 
         if isinstance(output, list):
             if len(output) == n_runs and len(output) > 0 and isinstance(output[0], list):
-                # 形如 [[...], [...]]
+                # Format: [[...], [...]]
                 return [v for sub in output for v in sub]
-            # 扁平向量
+            # Flat vector
             if len(output) == n_items * n_runs:
                 return output
 
@@ -264,7 +267,7 @@ def run_eval(
             try:
                 vals.append(float(s))
             except Exception:
-                # 跳过无法转换的值
+                # Skip values that cannot be converted
                 none_count += 1
                 continue
         if not vals:
@@ -283,7 +286,7 @@ def run_eval(
                 try:
                     vals.append(float(s))
                 except Exception:
-                    # 跳过无法转换的值
+                    # Skip values that cannot be converted
                     continue
             if vals:
                 avgs.append(sum(vals) / len(vals))
@@ -291,33 +294,30 @@ def run_eval(
                 avgs.append(None)
         return avgs
 
-    # 计算各指标并按语言对聚合
+    # Compute metrics and aggregate by language pair
     for m in metrics:
         if m == "bleurt":
             try:
-                # import eval.bleurt_eval_cli as bleurt_eval_cli
-                import eval.bleurt_service as bleurt_eval_cli
+                import eval.bleurt_eval_cli as bleurt_eval_cli
+                # import eval.bleurt_service as bleurt_eval_cli
             except Exception as e:
-                raise ImportError(f"请求 BLEURT 指标，但未找到 bleurt_eval_cli：{e}")
-            bleurt_path = "BLEURT-20"
+                raise ImportError(f"BLEURT metric requested but bleurt_eval_cli not found: {e}")
+            bleurt_path = bleurt_model_path if bleurt_model_path is not None else "BLEURT-20"
             bleurt_output = bleurt_eval_cli.func_call(bleurt_path, mt_list_for_runs, refs_flat)
             bleurt_scores_flat = _normalize_metric_output(bleurt_output, n, runs)
             avg, none_count = _average_overall(bleurt_scores_flat)
             metric_results[m] = avg
             metric_none_counts[m] = none_count
-            # 计算每条样本的平均分
+            # Compute per-item average score
             per_item_metric_avgs[m] = _average_per_item(bleurt_scores_flat, n, runs)
             valid_metrics.append(m)
-        elif m == "oss" or m == "oss-120b":
-            # 优先使用预加载的 OSS 模型；若未提供则按需加载（向后兼容）
-            oss_key = "oss" if m == "oss" else "oss-120b"
-            oss_model = None
-            if oss_models is not None:
-                oss_model = oss_models.get(oss_key)
+        elif m == "oss":
+            # Prefer pre-loaded OSS model; load on-demand if not provided (backward compatible)
+            oss_model = oss_models.get("oss") if oss_models is not None else None
 
-            oss_model_path = "gpt-oss-20b" if m == "oss" else "gpt-oss-120b"
+            model_path = oss_model_path if oss_model_path is not None else "openai/gpt-oss-120b"
             if oss_model is None:
-                oss_model = run_oss_eval.init_oss_model(oss_model_path)
+                oss_model = run_oss_eval.init_oss_model(model_path)
             oss_output = run_oss_eval.func_call(
                 src_list=src_flat,
                 mt_list=mt_list_for_runs,
@@ -325,7 +325,7 @@ def run_eval(
                 trg_langs=trg_langs_flat,
                 ref_list=ref_hint_flat if ref_hint_flat is not None else refs_flat,
                 model=oss_model,
-                model_path=oss_model_path,
+                model_path=model_path,
             )
             oss_scores_flat = _normalize_metric_output(oss_output, n, runs)
             avg, none_count = _average_overall(oss_scores_flat)
@@ -334,7 +334,7 @@ def run_eval(
             per_item_metric_avgs[m] = _average_per_item(oss_scores_flat, n, runs)
             valid_metrics.append(m)
         else:
-            # 未实现的指标可以在此扩展
+            # Unimplemented metrics can be extended here
             continue
 
     return metric_results, valid_metrics, metric_none_counts, per_item_metric_avgs
@@ -361,21 +361,69 @@ def main(
     top_p: float = 0.7,
     max_new_tokens: int = 4096,
     metrics: list[str] = ["bleurt", "oss"],
-    prompt_type: str = "Tower",
+    prompt_type: str = "codeblock-think",
     runs: int = 1,
     save_results: bool = False,
+    **kwargs,
 ):
+    """
+    Run machine translation evaluation for a model on specified datasets.
+
+    This function performs a two-stage evaluation pipeline:
+    1. Inference stage: Load the MT model and generate translations for all datasets
+    2. Evaluation stage: Release the MT model, load evaluation models (e.g., OSS),
+       and compute metrics on the generated translations.
+
+    Results are logged to Weights & Biases and optionally saved to JSON files.
+
+    Args:
+        data_id: One or more dataset identifiers from MT_TEST_DATA_META_INFO.
+            Can be a single string (comma-separated), tuple, or iterable of dataset IDs.
+        model_path: Path to the pretrained MT model weights.
+        model_name: Name of the model for logging and output file naming.
+        temperature: Sampling temperature for generation. Higher values produce more
+            random outputs. Defaults to 0.4.
+        top_p: Nucleus sampling probability threshold. Defaults to 0.7.
+        max_new_tokens: Maximum number of tokens to generate per translation.
+            Defaults to 4096.
+        metrics: List of evaluation metrics to compute. Supported values are
+            'bleurt' and 'oss'. The OSS model version can be specified via
+            oss_model_path in kwargs. Defaults to ["bleurt", "oss"].
+        prompt_type: Type of prompt template (and model output parser) to use for translation.
+            Defaults to "codeblock-think".
+        runs: Number of inference runs to perform for each sample. Multiple runs
+            can be used to assess model consistency. Defaults to 1.
+        save_results: Whether to save detailed results (predictions, per-item metrics)
+            to JSON files in the current directory. Defaults to False.
+        **kwargs: Additional keyword arguments. Supported keys:
+            - bleurt_model_path: Path to the BLEURT model. If not provided, defaults to "BLEURT-20".
+            - oss_model_path: Path to the gpt-oss model. If not provided, defaults to "openai/gpt-oss-120b".
+
+    Raises:
+        ValueError: If data_id is empty or contains invalid dataset identifiers.
+        ValueError: If the specified data path does not exist.
+        ImportError: If BLEURT metric is requested but bleurt_eval_cli is not found.
+    """
     if isinstance(data_id, Iterable):
         data_id_list = tuple(data_id)
     elif isinstance(data_id, str):
         data_id_list = tuple(data_id.strip().split(","))
+    
+    if isinstance(data_id, str):
+        data_id_list = tuple(data_id.strip().split(","))
+    elif isinstance(data_id, Iterable):
+        data_id_list = tuple(data_id)
+    else:
+        data_id_list = tuple(data_id)
+    
     if not data_id_list:
-        raise ValueError("data_id 不能为空")
+        raise ValueError(f"Invalid data_id. Please provide at least one valid data_id from {MT_TEST_DATA_META_INFO.keys()}")
 
-    # 先加载一次 MT 模型，后续复用，避免在 run_inference 内部重复加载
+
+    # Load MT model once and reuse, avoiding repeated loading in run_inference
     model, tokenizer = load_model_tokenizer(model_path)
 
-    # 第一阶段：对所有数据集先跑翻译推理，避免与评估（尤其是 oss）交替进行
+    # Stage 1: Run translation inference on all datasets first, avoiding interleaving with evaluation (especially OSS)
     dfs: Dict[str, pd.DataFrame] = {}
     mt_lists_for_runs: Dict[str, list[list[str]]] = {}
     lang_pairs: Dict[str, str] = {}
@@ -409,7 +457,7 @@ def main(
         )
         mt_lists_for_runs[did] = mt_list_for_runs
 
-    # MT 推理阶段结束，释放 MT 模型以腾出显存给 OSS 评估
+    # MT inference stage complete, release MT model to free GPU memory for OSS evaluation
     try:
         del model
         del tokenizer
@@ -417,15 +465,18 @@ def main(
     except Exception:
         pass
 
-    # 预加载 OSS 模型（按需加载使用到的指标）
-    oss_models: Dict[str, Any] = {}
-    if any(m in metrics for m in ("oss", "oss-120b")):
-        if "oss" in metrics:
-            oss_models["oss"] = run_oss_eval.init_oss_model("gpt-oss-20b")
-        if "oss-120b" in metrics:
-            oss_models["oss-120b"] = run_oss_eval.init_oss_model("gpt-oss-120b")
+    # Extract model paths from kwargs
+    bleurt_model_path = kwargs.get("bleurt_model_path")
+    oss_model_path = kwargs.get("oss_model_path")
 
-    # 第二阶段：对每个数据集分别做评估（包括 bleurt / oss 等）
+    # Pre-load OSS models (load on-demand for metrics being used)
+    oss_models: Dict[str, Any] = {}
+    if "oss" in metrics:
+        if oss_model_path is None:
+            oss_model_path = "openai/gpt-oss-120b"
+        oss_models["oss"] = run_oss_eval.init_oss_model(oss_model_path)
+
+    # Stage 2: Evaluate each dataset separately (including bleurt / oss etc.)
     datasets_metric_results: Dict[str, Dict[str, float]] = {}
     datasets_metric_none_counts: Dict[str, Dict[str, int]] = {}
     datasets_valid_metrics: Dict[str, List[str]] = {}
@@ -443,6 +494,8 @@ def main(
             runs,
             metrics,
             oss_models=oss_models,
+            bleurt_model_path=bleurt_model_path,
+            oss_model_path=oss_model_path,
         )
 
         datasets_metric_results[did] = metric_results
@@ -454,7 +507,7 @@ def main(
                 seen_metrics.add(m)
                 all_valid_metrics.append(m)
 
-        # 按需保存所有推理结果及每条样本的指标平均分到当前目录
+        # Optionally save all inference results and per-item metric averages to current directory
         if save_results:
             save_results_to_json(
                 df=df,
@@ -471,34 +524,18 @@ def main(
                 prompt_type=prompt_type,
             )
 
-    # 统一构建 wandb config，支持单个或多个数据集
-    if len(data_id_list) == 1:
-        only_id = data_id_list[0]
-        wandb_config = {
-            "dataset_name": only_id,
-            "model_path": model_path,
-            "model_name": model_name,
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_new_tokens": max_new_tokens,
-            "runs": runs,
-            "metrics": datasets_valid_metrics.get(only_id, all_valid_metrics),
-            "lang_pair": lang_pairs[only_id],
-            "prompt_type": prompt_type,
-        }
-    else:
-        wandb_config = {
-            "dataset_names": data_id_list,
-            "model_path": model_path,
-            "model_name": model_name,
-            "temperature": temperature,
-            "top_p": top_p,
-            "max_new_tokens": max_new_tokens,
-            "runs": runs,
-            "metrics": all_valid_metrics,
-            "lang_pairs": lang_pairs,
-            "prompt_type": prompt_type,
-        }
+    wandb_config = {
+        "dataset_names": data_id_list,
+        "model_path": model_path,
+        "model_name": model_name,
+        "temperature": temperature,
+        "top_p": top_p,
+        "max_new_tokens": max_new_tokens,
+        "runs": runs,
+        "metrics": all_valid_metrics,
+        "lang_pairs": lang_pairs,
+        "prompt_type": prompt_type,
+    }
 
     log_results_to_wandb(
         datasets_metric_results=datasets_metric_results,
