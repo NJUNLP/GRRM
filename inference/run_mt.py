@@ -153,7 +153,7 @@ def func_call(
     top_p: float = 1.0,
     max_new_tokens: int = 4096,
     retry: int = 4,
-    prompt_type: str = "Tower",
+    prompt_type: str = "codeblock-think",
     use_chat_template: bool = True,
     model = None,
     tokenizer = None,
