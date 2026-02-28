@@ -17,16 +17,14 @@ import numpy as np
 def log_results_to_wandb(
     datasets_metric_results: Dict[str, Dict[str, float]],
     config: Dict[str, Any],
-    task_type: str,
     scale: float = 100,
 ):
     project_name = "rm-eval"
     wandb.init(
         project=project_name,
-        name=f"{config['model_name']}-{task_type}",
+        name=f"{config['model_name']}",
         config=config,
     )
-    # 获取第一个数据集的 metrics 作为所有数据集的 metrics 列表
     metrics = list(next(iter(datasets_metric_results.values())).keys())
     columns = ["dataset_name"] + metrics
     metric_data = []
@@ -39,7 +37,7 @@ def log_results_to_wandb(
             metric_data[-1].append(metric_results[metric_name] * scale)
 
     table = wandb.Table(columns=columns, data=metric_data)
-    wandb.log({f"{task_type}_metric_results": table})
+    wandb.log({f"ranking_acc_results": table})
 
 
 def run_rm_SQM_inference(
@@ -147,7 +145,7 @@ def run_rm_GQM_inference(
     temperature: float,
     top_p: float,
     max_new_tokens: int,
-    task_type: str,
+    prompt_type: str,
     runs: int,
     add_prompt_example: bool = False,
     model=None,
@@ -175,7 +173,7 @@ def run_rm_GQM_inference(
             temperature,
             top_p,
             max_new_tokens,
-            prompt_type=task_type,
+            prompt_type=prompt_type,
             add_example=add_prompt_example,
             model=model,
             tokenizer=tokenizer,
@@ -249,16 +247,48 @@ def main(
     top_p: float = 0.7,
     max_new_tokens: int = 4096,
     add_prompt_example: bool = False,
-    task_type: str = "ranking",
+    prompt_type: str = "ranking_score",
     runs: int = 4,
     model_type: str = "grrm"
 ):
-    if task_type not in ["score", "ranking", "ranking_score"]:
-        raise ValueError(
-            f"task_type must be one of ['score', 'ranking', 'ranking_score']"
-        )
-    
+    """
+    Run ranking accuracy evaluation for reward models on specified datasets.
 
+    This function loads the specified model and datasets, performs inference to generate
+    scores/rankings for translation candidates, evaluates the predictions against reference
+    scores, and logs the results to Weights & Biases.
+
+    Args:
+        data_id: One or more dataset identifiers from RANKING_TEST_DATA_META_INFO.
+            Can be a single string (comma-separated), tuple, or iterable of dataset IDs.
+        model_path: Path to the pretrained model weights.
+        model_name: Name of the model for logging purposes.
+        temperature: Sampling temperature for generation. Higher values produce more
+            random outputs. Defaults to 0.4.
+        top_p: Nucleus sampling probability threshold. Defaults to 0.7.
+        max_new_tokens: Maximum number of tokens to generate. Defaults to 4096.
+        add_prompt_example: Whether to include examples in the prompt for GRRM, but currently not used.
+            Defaults to False.
+        prompt_type: Type of prompt template (and model output parser). Only used for GQM models. Must be one of ['score', 'ranking', 
+            'ranking_score']. Defaults to "ranking_score".
+        runs: Number of inference runs to perform for each sample. Results are
+            aggregated across runs. Defaults to 4.
+        model_type: Type of model to evaluate. Must be one of ['grrm', 'sqmrm', 'drm'].
+            - 'grrm': Group Relative Reward Model (GQM)
+            - 'sqmrm': Scalar Quality Metric (SQM) Generative Reward Model
+            - 'drm':  Bradley-Terry Reward Model 
+            Defaults to "grrm".
+
+    Raises:
+        ValueError: If prompt_type is not one of ['score', 'ranking', 'ranking_score'].
+        ValueError: If model_type is not one of ['grrm', 'sqmrm', 'drm'].
+        ValueError: If data_id is empty or contains invalid dataset identifiers.
+        ValueError: If the specified data path does not exist.
+    """
+    if prompt_type not in ["score", "ranking", "ranking_score"]:
+        raise ValueError(
+            f"prompt_type must be one of ['score', 'ranking', 'ranking_score']"
+        )
     
     if model_type not in ["grrm", "sqmrm", "drm"]:
         raise ValueError(
@@ -273,7 +303,7 @@ def main(
         data_id_list = tuple(data_id)
     
     if not data_id_list:
-        raise ValueError("data_id 不能为空")
+        raise ValueError(f"Invalid data_id. Please provide at least one valid data_id from {RANKING_TEST_DATA_META_INFO.keys()}")
 
     dfs: Dict[str, pd.DataFrame] = {}
     lang_pairs: Dict[str, str] = {}
@@ -317,7 +347,7 @@ def main(
                 temperature,
                 top_p,
                 max_new_tokens,
-                task_type,
+                prompt_type,
                 runs,
                 add_prompt_example,
                 model=model,
@@ -360,7 +390,7 @@ def main(
         "temperature": temperature,
         "top_p": top_p,
         "max_new_tokens": max_new_tokens,
-        "task_type": task_type,
+        "prompt_type": prompt_type,
         "runs": runs,
         "metrics": all_valid_metrics,
         "lang_pairs": lang_pairs,
@@ -369,7 +399,7 @@ def main(
     log_results_to_wandb(
         datasets_metric_results=datasets_metric_results,
         config=wandb_config,
-        task_type=task_type,
+        prompt_type=prompt_type,
     )
 
 
