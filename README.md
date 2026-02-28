@@ -30,7 +30,6 @@ Ranking accuracy performance and downstream translation performance on Seed-X-Ch
 
 ## Method Overview
 
-
 **Core idea:** Standard generative reward models often evaluate candidates independently (**Scalar Quality Metric, SQM**) and suffer from score saturation, which causes vanishing advantages in GRPO and stalls optimization.  
 We propose **GQM**, which evaluates a *group* of candidates jointly to produce reliable fine-grained intra-group ranking, and implement it as **GRRM**, a high-throughput reward model with explicit comparative reasoning.
 
@@ -43,10 +42,92 @@ We propose **GQM**, which evaluates a *group* of candidates jointly to produce r
   <img src="static/GRRM_framework.png" alt="GRRM Framework" width="600">
 </p>
 
+
+<details><summary>GRRM Example:</summary>
+
+````markdown
+[prompt]
+Given a source text in English and multiple translation candidates in Chinese. Perform a step by step analysis and comparison of the translation quality for the candidates. Finally, rank and score the 
+candidates with integer scores on a scale from 0 to 10.
+
+Source text:
+```
+I have a frog in my throat.
+```
+
+Translation A:
+```
+我嗓子眼里好像有只青蛙。,
+```
+Translation B:
+```
+我嗓子有点哑。
+```
+
+[response]
+An analysis and comparison of the translation candidates:
+
+**Source Text:** "I have a frog in my throat."
+This is an English idiomatic expression. Literally, it doesn't mean a frog is physically stuck in one's throat. It means the person has a tickle, lump, or irritation in their throat that affects their voice, often making them sound hoarse. It is used to describe a temporary condition.
+
+**Translation A: 我嗓子有点哑。**
+*   **Faithfulness:** This translation is not literal but captures the *consequence* or *function* of the source idiom. "我嗓子有点哑" means "My voice is a little hoarse." This is a very common and natural way in Chinese to express the same situation as "I have a frog in my throat." It correctly conveys the practical meaning in this context.
+*   **Fluency:** This is a perfectly fluent and idiomatic Chinese expression that a native speaker would use in daily conversation.
+*   **Overall:** A good translation that prioritizes communicative effectiveness over literalism. It is highly acceptable.
+
+**Translation B: 我嗓子眼里好像有只青蛙。**
+*   **Faithfulness:** This translation is very literal. "我嗓子眼里" means "in my throat," and "好像" ("as if" or "seemingly") is an attempt to translate the metaphorical nature of the source. The main problem is "有只青蛙" (there is a frog). This is a direct, word-for-word physical translation that completely misses the idiomatic meaning. It explains the phrase as if one was literally trying to describe a real frog in the throat.
+*   **Fluency:** This sentence is grammatically correct, but it sounds highly unnatural and awkward in Chinese. While hypothetically it could be understood literally by some as a form of sick and disturbing joke, it is not used to express hoarseness in any common, standard way.
+*   **Overall:** A poor translation because it fails to convey the correct idiomatic meaning and results in an unnatural, almost comical phrasing.
+
+**Conclusion:**
+
+*   **Translation A** is the superior choice. It effectively communicates the intended meaning in a natural, idiomatic way that is common in Chinese.
+*   **Translation B** is a very literal, inaccurate, and awkward attempt that misses the point of the idiom and sounds incorrect.
+
+### Final Ranking:
+
+A > B
+
+### Scores:
+
+A: 8, B: 3
+````
+</details>
+
 ## Performance Overview
 
+### 1. Reward Model Ranking Accuracy
+Ranking accuracy (%) on the held-out test set (Gemini-annotated) versus human-annotated benchmarks and the challenge set. **GRRM** achieves state-of-the-art ranking performance, especially on complex reasoning scenarios (Seed-X-Challenge).
 
----
+| Model | Paradigm | held-out (Zh↔En) | NT20 (Zh→En) | GenMT22 (En→Zh) | GenMT22 (Zh→En) | GenMT22 (En→De) | GenMT22 (En→Ru) | Seed-X-Challenge | Avg. |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| *LLM-as-a-Judge* | | | | | | | | | |
+| DeepSeek-R1-0528 | SQM | 66.11 | 48.42 | 43.67 | 58.09 | 53.64 | 59.13 | 47.22 | 51.69 |
+| DeepSeek-R1-0528 | GQM | 80.92 | 61.98 | 64.38 | 65.79 | 63.26 | 69.15 | 81.82 | 67.73 |
+| *Discriminative RMs* | | | | | | | | | |
+| CometKiwi-XXL | SQM | 72.01 | 57.82 | 66.49 | 61.60 | 61.20 | 67.12 | 46.72 | 60.16 |
+| BT-RM | SQM | 82.62 | 58.16 | 66.49 | 64.92 | 58.14 | 66.10 | 58.84 | 62.11 |
+| *Generative RMs* | | | | | | | | | |
+| SQM-GenRM (RLVR) | SQM | 64.25 | 49.21 | 39.42 | 60.37 | 49.16 | 54.82 | 38.38 | 48.56 |
+| **GRRM (RLVR)** | **GQM** | **82.58** | **57.77** | **62.17** | **66.00** | **61.04** | **66.67** | **70.39** | **64.01** |
+
+### 2. Downstream Machine Translation Performance
+MT performance on WMT and Seed-X-Challenge benchmarks. We report BLEURT-20 and LLM-as-a-Judge scores (evaluated by DeepSeek-R1-0528). Optimizing with GRRM via GRPO significantly improves the translation quality and reasoning capabilities of the base model.
+
+| Model | WMT Zh→En (BLEURT / R1) | WMT En→Zh (BLEURT / R1) | WMT En→X (BLEURT / R1) | Seed-X Zh→En (BLEURT / R1) | Seed-X En→Zh (BLEURT / R1) |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| *General LLMs* | | | | | |
+| Gemini-2.5-Pro | 68.66 / 92.92 | 66.00 / 91.31 | 68.87 / 90.35 | 71.59 / 89.41 | 69.19 / 86.06 |
+| DeepSeek-R1-0528 | 67.78 / 92.34 | 64.87 / 89.24 | 67.72 / 88.48 | 70.92 / 87.95 | 68.23 / 84.40 |
+| Qwen2.5-7B-Instruct | 67.31 / 88.49 | 59.92 / 80.51 | 58.72 / 72.51 | 66.59 / 79.23 | 62.75 / 72.37 |
+| *Specialized Models* | | | | | |
+| TowerInstruct-13B | 67.56 / 84.83 | 62.92 / 77.63 | 66.61 / 82.68 | 63.32 / 69.54 | 63.46 / 71.17 |
+| SeedX-PPO | 69.02 / 90.47 | 67.21 / 87.98 | **68.35** / **86.04** | 69.37 / 82.47 | 68.72 / 80.56 |
+| SSR-X-Zero-7B | 68.30 / 88.67 | 66.12 / 83.78 | - / - | 68.84 / 81.15 | 67.08 / 77.56 |
+| Qwen2.5-7B-SFT | 67.07 / 87.78 | 59.99 / 76.98 | 57.14 / 67.91 | 67.65 / 80.91 | 62.36 / 72.42 |
+| **⭐+ GRPO** | 67.41 / **92.24** | 64.80 / 87.80 | 64.65 / 83.86 | **69.55** / 85.90 | 67.05 / 82.55 |
+| **⭐+ GRPO w/ CLA** | 67.39 / 92.09 | 63.91 / **88.29** | 64.50 / 83.71 | 69.25 / **88.58** | 67.07 / **83.33** |
 
 ## Getting Started
 
